@@ -13,7 +13,7 @@
 
 ## 프로젝트 구조
 ```
-weather_mail/
+app/
 │
 ├── config/
 │   └── settings.py       # 설정 및 환경 변수
