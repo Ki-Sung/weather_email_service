@@ -1,0 +1,207 @@
+## 이메일 전송 관련 서비스
+import logging
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from typing import Dict, Any, Optional, List
+
+from config.settings import (
+    SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM, 
+    RECIPIENT, BCC_RECIPIENTS
+)
+from utils.helpers import (
+    get_weather_condition, 
+    get_air_quality_level, 
+    get_season_advice, 
+    get_weather_message
+)
+
+# 이메일 내용 생성 
+def create_email_content(
+    weather_data: Dict[str, Any], 
+    air_quality_data: Optional[Dict[str, Any]]
+) -> Dict[str, str]:
+    """
+    날씨 데이터를 기반으로 이메일 내용을 생성합니다.
+    
+    Args:
+        weather_data (Dict[str, Any]): 날씨 정보가 포함된 JSON 객체
+        air_quality_data (Optional[Dict[str, Any]]): 대기 질 정보가 포함된 JSON 객체 (없을 수 있음)
+    
+    Returns:
+        Dict[str, str]: 이메일 제목과 본문 내용
+    """
+    # 날씨 정보가 없으면 오류 메시지 반환 
+    if not weather_data:
+        return {
+            "subject": "[날씨 알리미] 날씨 정보 불러오기 실패",
+            "body": "<p>날씨 정보를 불러오는 데 실패했습니다. 다시 시도해주세요.</p>"
+        }
+    
+    # 현재 날씨 정보 추출
+    current = weather_data.get("current", {})       # 현재 날씨 정보 
+    hourly = weather_data.get("hourly", [])[:12]    # 12시간 데이터
+    daily = weather_data.get("daily", [])[0] if weather_data.get("daily") else {}    # 일일 데이터 
+    
+    # 필요한 데이터 추출
+    current_temp = current.get("temp", 0)            # 현재 온도 
+    temp_max = daily.get("temp", {}).get("max", 0) if daily else 0    # 최고 온도 
+    temp_min = daily.get("temp", {}).get("min", 0) if daily else 0    # 최저 온도 
+    
+    # 현재 날씨 상태 추출
+    current_weather = current.get("weather", [{}])[0]       # 현재 날씨 상태 
+    current_weather_id = current_weather.get("id", 800)     # 날씨 아이디 
+    
+    # 대기질 정보
+    air_quality_msg = "대기질 정보를 불러올 수 없습니다."
+    air_quality_level = ""
+    
+    if air_quality_data and "list" in air_quality_data and air_quality_data["list"]:  # 대기질 데이터가 있고, 목록이 있으면 
+        aqi = air_quality_data["list"][0].get("main", {}).get("aqi", 0)               # 대기질 지수 추출 
+        # 대기질 지수가 있으면 대기질 수준 추출 
+        if aqi:
+            air_quality_level, air_quality_msg = get_air_quality_level(aqi)           # 대기질 수준과 메시지 추출 
+    
+    # 날씨 상태 확인
+    weather_condition, weather_icon = get_weather_condition(current_weather_id)       # 날씨 상태와 아이콘 추출 
+    weather_msg = get_weather_message(weather_condition)                              # 날씨 메시지 추출 
+    
+    # 비 또는 눈 예보 확인
+    will_rain = any(hour.get("weather", [{}])[0].get("id", 800) < 700 for hour in hourly)
+    
+    # 계절별 조언
+    season_advice = get_season_advice(temp_max, temp_min)
+    
+    # 이메일 본문 작성
+    msg_text = f"""
+    <html>
+    <body>
+    <h2>오늘의 날씨 알림 {weather_icon}</h2>
+    
+    <p>안녕하세요!</p>
+    
+    <p>오늘 서울의 날씨를 알려드립니다.</p>
+    <hr>
+    
+    <h3>현재 날씨: {weather_condition} {weather_icon}</h3>
+    
+    <p>{weather_msg}</p>
+    
+    <p>• 현재 온도: {current_temp:.1f}°C</p>
+    
+    <p>• 최고 온도: {temp_max:.1f}°C</p>
+    
+    <p>• 최저 온도: {temp_min:.1f}°C</p>
+    <hr>
+    
+    <h3>대기질 정보: {air_quality_level}</h3>
+    
+    <p>{air_quality_msg}</p>
+    <hr>
+    """
+    
+    # 특별 알림 추가
+    if season_advice:
+        msg_text += f"<h3>특별 알림</h3>\n\n<p>{season_advice}</p>\n<hr>\n"
+    
+    # 비 또는 눈 예보 확인 
+    if will_rain:
+        msg_text += "<p><strong>오늘 비 또는 눈이 예상되니 외출 시 우산을 꼭 챙기세요!</strong></p>\n<hr>\n"
+    
+    # 이메일 본문 추가 
+    msg_text += """
+    <p>좋은 하루 되세요!</p>
+    
+    <p>날씨 알리미 드림</p>
+    </body>
+    </html>
+    """
+    
+    # 제목 설정
+    subject = f"[날씨 알리미] 오늘의 날씨: {weather_condition} {weather_icon}"
+    if will_rain:
+        subject = f"[날씨 알리미] 오늘 비/눈 예보! 우산을 챙기세요 {weather_icon}"
+    
+    return {
+        "subject": subject,
+        "body": msg_text
+    }
+
+
+# 이메일 전송 
+def send_email(subject: str, body: str) -> bool:
+    """
+    이메일을 전송하는 함수 입니다. - 일반 SMTP를 사용합니다.
+    
+    Args:
+        subject: 이메일 제목
+        body: HTML 형식의 이메일 내용
+    
+    Returns:
+        bool: 이메일 전송 성공 여부
+    """
+    # 수신자 설정
+    to_recipients = [RECIPIENT] if RECIPIENT else []
+    bcc_recipients = BCC_RECIPIENTS if BCC_RECIPIENTS else []
+    
+    # 수신자가 없으면 종료
+    if not to_recipients and not bcc_recipients:
+        logging.error("수신자가 설정되지 않았습니다.")
+        return False
+    
+    # 모든 수신자 목록 (To + BCC)
+    all_recipients = to_recipients.copy()  # 새 리스트 생성
+    all_recipients.extend(bcc_recipients)  # 리스트에 리스트 추가
+    
+    # 메일 생성
+    msg = MIMEMultipart('related')
+    msg['Subject'] = subject
+    msg['From'] = SMTP_FROM
+    msg['To'] = ", ".join(to_recipients) if to_recipients else ""  # 표시되는 수신자에는 BCC 제외
+    msg.preamble = 'This is a multi-part message in MIME format.'
+    
+    # 대체 콘텐츠 컨테이너 생성
+    msgAlternative = MIMEMultipart('alternative')
+    msg.attach(msgAlternative)
+    
+    # 메일 본문 내용 작성
+    msgText = MIMEText(body, 'html', _charset="utf8")
+    msgAlternative.attach(msgText)
+    
+    try:
+        # 로그 기록
+        logging.info(f"일반 SMTP로 이메일 전송 시도 ({SMTP_HOST}:{SMTP_PORT})...")
+        
+        # 일반 SMTP 연결
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
+            # 로그인
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            
+            # 이메일 전송 - 모든 수신자에게 전송하지만 BCC는 숨김처리
+            server.sendmail(
+                SMTP_FROM,          # 보내는 사람 
+                all_recipients,     # 모든 수신자 (TO + BCC)
+                msg.as_string()     # 이메일 내용 
+            )
+            
+            # 로그 기록
+            to_log = ", ".join(to_recipients) if to_recipients else "없음"       # 수신자 로그 
+            bcc_log = ", ".join(bcc_recipients) if bcc_recipients else "없음"    # BCC 로그 
+            
+            logging.info(f"이메일 전송 완료: {subject}")                            # 로그 기록 
+            logging.info(f"수신자(TO): {to_log}")                                 # 수신자 로그 
+            logging.info(f"수신자(BCC): {bcc_log}")                               # BCC 로그 
+            
+            return True
+            
+    except Exception as e:
+        # 이메일 전송 중 오류 발생 시 경고 메시지 출력
+        logging.error(f"이메일 전송 중 오류 발생: {e}")
+        
+        # 오류 세부 정보 기록
+        if hasattr(e, 'smtp_code'):
+            logging.error(f"SMTP 코드: {e.smtp_code}")                              # SMTP 코드 
+        if hasattr(e, 'smtp_error'):
+            logging.error(f"SMTP 오류: {e.smtp_error}")                             # SMTP 오류 
+        
+        return False
