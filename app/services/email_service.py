@@ -3,7 +3,7 @@ import logging
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 
 from config.settings import (
     SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM, 
@@ -40,7 +40,7 @@ def create_email_content(
     
     # 현재 날씨 정보 추출
     current = weather_data.get("current", {})       # 현재 날씨 정보 
-    hourly = weather_data.get("hourly", [])[:12]    # 12시간 데이터
+    hourly = weather_data.get("hourly", [])[:15]    # 15시간 데이터로 변경
     daily = weather_data.get("daily", [])[0] if weather_data.get("daily") else {}    # 일일 데이터 
     
     # 필요한 데이터 추출
@@ -66,8 +66,8 @@ def create_email_content(
     weather_condition, weather_icon = get_weather_condition(current_weather_id)       # 날씨 상태와 아이콘 추출 
     weather_msg = get_weather_message(weather_condition)                              # 날씨 메시지 추출 
     
-    # 비 또는 눈 예보 확인
-    will_rain = any(hour.get("weather", [{}])[0].get("id", 800) < 700 for hour in hourly)
+    # 비 또는 눈 예보 확인 - 분리하여 확인
+    will_rain, will_snow = check_precipitation_forecast(hourly)
     
     # 계절별 조언
     season_advice = get_season_advice(temp_max, temp_min)
@@ -104,9 +104,13 @@ def create_email_content(
     if season_advice:
         msg_text += f"<h3>특별 알림</h3>\n\n<p>{season_advice}</p>\n<hr>\n"
     
-    # 비 또는 눈 예보 확인 
+    # 비 예보 확인
     if will_rain:
-        msg_text += "<p><strong>오늘 비 또는 눈이 예상되니 외출 시 우산을 꼭 챙기세요!</strong></p>\n<hr>\n"
+        msg_text += "<p><strong>오늘 비가 예상되니 외출 시 우산을 꼭 챙기세요!</strong></p>\n<hr>\n"
+    
+    # 눈 예보 확인
+    if will_snow:
+        msg_text += "<p><strong>오늘 눈이 예상되니 외출 시 따뜻하게 입고 미끄럼에 주의하세요!</strong></p>\n<hr>\n"
     
     # 이메일 본문 추가 
     msg_text += """
@@ -117,15 +121,51 @@ def create_email_content(
     </html>
     """
     
-    # 제목 설정
+    # 제목 설정 - 비와 눈 예보 분리
     subject = f"[날씨 알리미] 오늘의 날씨: {weather_condition} {weather_icon}"
-    if will_rain:
-        subject = f"[날씨 알리미] 오늘 비/눈 예보! 우산을 챙기세요 {weather_icon}"
+    
+    if will_rain and will_snow:
+        subject = f"[날씨 알리미] 오늘 비와 눈 예보! 우산을 챙기세요 {weather_icon}"
+    elif will_rain:
+        subject = f"[날씨 알리미] 오늘 비 예보! 우산을 챙기세요 {weather_icon}"
+    elif will_snow:
+        subject = f"[날씨 알리미] 오늘 눈 예보! 따뜻하게 입으세요 {weather_icon}"
     
     return {
         "subject": subject,
         "body": msg_text
     }
+
+
+def check_precipitation_forecast(hourly_data: List[Dict[str, Any]]) -> Tuple[bool, bool]:
+    """
+    시간별 날씨 데이터에서 비와 눈 예보를 확인합니다.
+    
+    Args:
+        hourly_data (List[Dict[str, Any]]): 시간별 날씨 정보
+        
+    Returns:
+        Tuple[bool, bool]: (비 예보 여부, 눈 예보 여부)
+    """
+    will_rain = False
+    will_snow = False
+    
+    for hour in hourly_data:
+        weather_id = hour.get("weather", [{}])[0].get("id", 800)
+        
+        # 비 예보 확인 (500-531: 비)
+        if 500 <= weather_id <= 531:
+            will_rain = True
+            
+        # 눈 예보 확인 (600-622: 눈)
+        if 600 <= weather_id <= 622:
+            will_snow = True
+            
+        # 양쪽 다 확인되면 루프 종료
+        if will_rain and will_snow:
+            break
+            
+    return will_rain, will_snow
 
 
 # 이메일 전송 
