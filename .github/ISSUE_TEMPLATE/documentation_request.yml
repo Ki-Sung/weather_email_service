@@ -1,0 +1,110 @@
+name: 문서화 요청
+description: 문서 추가 또는 개선 요청
+title: "[문서]: "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        날씨 메일 서비스의 문서화에 관한 제안이나 개선 요청을 해주셔서 감사합니다. 아래 양식을 작성하여 문서화 요청을 상세히 설명해 주세요.
+  
+  - type: dropdown
+    id: doc_type
+    attributes:
+      label: 문서 유형
+      description: 필요한 문서 유형을 선택해주세요.
+      options:
+        - 코드 주석 개선
+        - 함수/모듈 레벨 문서화
+        - README 업데이트
+        - 설치/설정 가이드
+        - 사용자 매뉴얼
+        - API 문서화
+        - 아키텍처 문서화
+        - 성능 및 유지보수 가이드
+        - 트러블슈팅 가이드
+        - 기타 (아래에 자세히 설명)
+    validations:
+      required: true
+  
+  - type: dropdown
+    id: component
+    attributes:
+      label: 관련 구성요소
+      description: 문서화가 필요한 구성요소를 선택해주세요.
+      options:
+        - 날씨 데이터 서비스 (weather_service)
+        - 이메일 서비스 (email_service)
+        - 스케줄러 (scheduler)
+        - 로깅 (logging)
+        - 메모리 관리 (memory_management)
+        - 설정 (configuration)
+        - 전체 프로젝트 (project-wide)
+        - 기타 (아래에 자세히 설명)
+    validations:
+      required: true
+  
+  - type: textarea
+    id: description
+    attributes:
+      label: 문서화 요청 설명
+      description: 필요한 문서화 작업에 대해 상세히 설명해 주세요.
+      placeholder: 어떤 내용이 문서화되어야 하는지, 왜 필요한지 설명해 주세요.
+    validations:
+      required: true
+  
+  - type: textarea
+    id: current_state
+    attributes:
+      label: 현재 상태
+      description: 현재 문서화 상태 및 문제점에 대해 설명해 주세요.
+      placeholder: |
+        - 누락된 문서: [예) 설치 가이드가 없음]
+        - 불완전한 문서: [예) API 엔드포인트 설명이 불충분함]
+        - 오래된 문서: [예) README가 최신 버전을 반영하지 않음]
+    validations:
+      required: false
+  
+  - type: textarea
+    id: proposed_content
+    attributes:
+      label: 제안하는 내용 (선택사항)
+      description: 문서에 포함되어야 할 내용에 대한 제안이 있다면 작성해 주세요.
+      placeholder: |
+        예상 목차, 주요 내용, 예제 코드 등을 제안할 수 있습니다.
+    validations:
+      required: false
+  
+  - type: textarea
+    id: references
+    attributes:
+      label: 참고 자료 (선택사항)
+      description: 문서화 작업에 도움이 될 수 있는 참고 자료가 있다면 공유해 주세요.
+      placeholder: |
+        - 관련 코드 파일: [예) weather_service.py]
+        - 참고할 만한 유사 프로젝트 문서: [예) 링크]
+        - 기타 참고 자료: [예) 블로그 포스트, 기술 문서 등]
+    validations:
+      required: false
+  
+  - type: checkboxes
+    id: audience
+    attributes:
+      label: 대상 독자
+      description: 이 문서의 주요 대상 독자를 선택해 주세요.
+      options:
+        - label: 개발자 (프로젝트 기여자)
+        - label: 시스템 관리자 (설치 및 유지보수)
+        - label: 최종 사용자
+        - label: API 사용자
+  
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: 코드 규약
+      description: 이슈를 제출하기 전에 다음 사항을 확인해 주세요.
+      options:
+        - label: 이미 존재하는 이슈인지 확인했습니다.
+          required: true
+        - label: 이 문서화 요청이 프로젝트의 품질 향상에 기여할 것입니다.
+          required: true 

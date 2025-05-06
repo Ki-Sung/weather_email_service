@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 날씨 메일 서비스 문의
+    url: https://github.com/your-username/weather-mail-service/discussions
+    about: 일반적인 질문이나 토론은 GitHub Discussions를 이용해 주세요. 

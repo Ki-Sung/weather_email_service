@@ -1,0 +1,85 @@
+name: 기능 요청
+description: 새로운 기능 또는 개선 아이디어 제안
+title: "[기능]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        날씨 메일 서비스에 새로운 기능이나 개선 아이디어를 제안해 주셔서 감사합니다. 아래 양식을 작성하여 귀하의 아이디어를 상세히 설명해 주세요.
+  
+  - type: dropdown
+    id: component
+    attributes:
+      label: 관련 구성요소
+      description: 이 기능 요청이 관련된 구성요소를 선택해주세요.
+      options:
+        - 날씨 데이터 서비스 (weather_service)
+        - 이메일 서비스 (email_service)
+        - 스케줄러 (scheduler)
+        - 로깅 (logging)
+        - 메모리 관리 (memory_management)
+        - 설정 (configuration)
+        - 새로운 구성요소 (아래에 자세히 설명)
+        - 기타 (아래에 자세히 설명)
+    validations:
+      required: true
+  
+  - type: textarea
+    id: problem
+    attributes:
+      label: 관련 문제 또는 요구사항
+      description: 이 기능이 해결하고자 하는 문제나 요구사항은 무엇인가요?
+      placeholder: 현재 서비스에서 부족하다고 느끼는 점이나 개선이 필요한 부분에 대해 설명해 주세요.
+    validations:
+      required: true
+  
+  - type: textarea
+    id: solution
+    attributes:
+      label: 제안하는 해결책
+      description: 어떤 기능이나 변경이 필요한지 상세히 설명해 주세요.
+      placeholder: 원하는 기능이나 변경사항에 대해 가능한 한 구체적으로 설명해 주세요.
+    validations:
+      required: true
+  
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 대안 방법
+      description: 고려해 본 다른 대안이나 접근 방식이 있나요?
+      placeholder: 이 문제를 해결하기 위한 다른 방법에 대해 생각해 보셨다면 설명해 주세요.
+    validations:
+      required: false
+  
+  - type: textarea
+    id: context
+    attributes:
+      label: 추가 컨텍스트
+      description: 이 기능 요청에 관련된 추가 정보나 스크린샷
+      placeholder: 추가 정보, 스크린샷, 참고 자료 등을 첨부해 주세요.
+    validations:
+      required: false
+  
+  - type: checkboxes
+    id: requirements
+    attributes:
+      label: 구현 요구사항
+      description: 이 기능이 필요로 하는 사항을 선택해 주세요.
+      options:
+        - label: 새로운 외부 라이브러리 또는 API 사용
+        - label: 데이터베이스 스키마 변경
+        - label: 설정 파일 변경
+        - label: UI/UX 변경
+        - label: 성능 최적화 필요
+  
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: 코드 규약
+      description: 이슈를 제출하기 전에 다음 사항을 확인해 주세요.
+      options:
+        - label: 이미 존재하는 이슈인지 확인했습니다.
+          required: true
+        - label: 이 기능이 프로젝트의 목표와 일치하는지 고려했습니다.
+          required: true 
