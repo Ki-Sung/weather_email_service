@@ -3,7 +3,8 @@ import logging
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple, Counter as CounterType
+from collections import Counter
 
 from config.settings import (
     SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM, 
@@ -52,6 +53,9 @@ def create_email_content(
     current_weather = current.get("weather", [{}])[0]       # 현재 날씨 상태 
     current_weather_id = current_weather.get("id", 800)     # 날씨 아이디 
     
+    # 15시간 동안의 주요 날씨 상태 파악
+    overall_weather_condition, overall_weather_icon = get_overall_weather(hourly)
+    
     # 대기질 정보
     air_quality_msg = "대기질 정보를 불러올 수 없습니다."
     air_quality_level = ""
@@ -63,8 +67,8 @@ def create_email_content(
             air_quality_level, air_quality_msg = get_air_quality_level(aqi)           # 대기질 수준과 메시지 추출 
     
     # 날씨 상태 확인
-    weather_condition, weather_icon = get_weather_condition(current_weather_id)       # 날씨 상태와 아이콘 추출 
-    weather_msg = get_weather_message(weather_condition)                              # 날씨 메시지 추출 
+    current_condition, current_icon = get_weather_condition(current_weather_id)       # 현재 날씨 상태와 아이콘 추출 
+    weather_msg = get_weather_message(overall_weather_condition)                      # 날씨 메시지 추출 (종합 날씨 기준)
     
     # 비 또는 눈 예보 확인 - 분리하여 확인
     will_rain, will_snow = check_precipitation_forecast(hourly)
@@ -72,18 +76,21 @@ def create_email_content(
     # 계절별 조언
     season_advice = get_season_advice(temp_max, temp_min)
     
+    # 15시간 예보 HTML 생성
+    hourly_forecast_html = generate_hourly_forecast_html(hourly)
+    
     # 이메일 본문 작성
     msg_text = f"""
     <html>
     <body>
-    <h2>오늘의 날씨 알림 {weather_icon}</h2>
+    <h2>오늘의 날씨 알림 {overall_weather_icon}</h2>
     
     <p>안녕하세요!</p>
     
     <p>오늘 서울의 날씨를 알려드립니다.</p>
     <hr>
     
-    <h3>현재 날씨: {weather_condition} {weather_icon}</h3>
+    <h3>오늘의 종합 날씨: {overall_weather_condition} {overall_weather_icon}</h3>
     
     <p>{weather_msg}</p>
     
@@ -122,19 +129,121 @@ def create_email_content(
     """
     
     # 제목 설정 - 비와 눈 예보 분리
-    subject = f"[날씨 알리미] 오늘의 날씨: {weather_condition} {weather_icon}"
+    subject = f"[날씨 알리미] 오늘의 날씨: {overall_weather_condition} {overall_weather_icon}"
     
     if will_rain and will_snow:
-        subject = f"[날씨 알리미] 오늘 비와 눈 예보! 우산을 챙기세요 {weather_icon}"
+        subject = f"[날씨 알리미] 오늘 비와 눈 예보! 우산을 챙기세요 {overall_weather_icon}"
     elif will_rain:
-        subject = f"[날씨 알리미] 오늘 비 예보! 우산을 챙기세요 {weather_icon}"
+        subject = f"[날씨 알리미] 오늘 비 예보! 우산을 챙기세요 {overall_weather_icon}"
     elif will_snow:
-        subject = f"[날씨 알리미] 오늘 눈 예보! 따뜻하게 입으세요 {weather_icon}"
+        subject = f"[날씨 알리미] 오늘 눈 예보! 따뜻하게 입으세요 {overall_weather_icon}"
     
     return {
         "subject": subject,
         "body": msg_text
     }
+
+
+def get_overall_weather(hourly_data: List[Dict[str, Any]]) -> Tuple[str, str]:
+    """
+    12시간 데이터를 분석하여 종합적인 날씨 상태를 결정합니다.
+    
+    Args:
+        hourly_data (List[Dict[str, Any]]): 시간별 날씨 정보
+        
+    Returns:
+        Tuple[str, str]: (종합 날씨 상태, 날씨 아이콘)
+    """
+    # 날씨 ID 카운터 초기화
+    weather_ids: CounterType[int] = Counter()
+    
+    # 12시간 동안의 날씨 ID 수집
+    for hour in hourly_data:
+        weather_id = hour.get("weather", [{}])[0].get("id", 800)
+        weather_ids[weather_id] += 1
+    
+    # 우선순위 그룹 (비, 눈, 뇌우 등의 특별한 날씨 상태는 우선순위가 높음)
+    priority_groups = [
+        # 뇌우 (200-299)
+        [id for id in weather_ids.keys() if 200 <= id <= 299],
+        # 비 (300-399, 500-599)
+        [id for id in weather_ids.keys() if (300 <= id <= 399) or (500 <= id <= 599)],
+        # 눈 (600-699)
+        [id for id in weather_ids.keys() if 600 <= id <= 699],
+        # 안개 등 (700-799)
+        [id for id in weather_ids.keys() if 700 <= id <= 799],
+        # 구름/맑음 (800-899)
+        [id for id in weather_ids.keys() if 800 <= id <= 899]
+    ]
+    
+    # 우선순위 그룹에서 가장 빈도가 높은 날씨 ID 찾기
+    most_significant_id = 800  # 기본값은 맑음
+    
+    for group in priority_groups:
+        if group:
+            # 해당 그룹에서 가장 빈도가 높은 날씨 ID 찾기
+            group_counts = {id: weather_ids[id] for id in group}
+            most_common_id = max(group_counts.items(), key=lambda x: x[1])[0]
+            
+            # 해당 날씨가 전체 시간의 25% 이상을 차지하면 유의미하다고 판단
+            if weather_ids[most_common_id] >= len(hourly_data) / 4:
+                most_significant_id = most_common_id
+                break
+    
+    # 날씨 상태와 아이콘 가져오기
+    return get_weather_condition(most_significant_id)
+
+
+def generate_hourly_forecast_html(hourly_data: List[Dict[str, Any]]) -> str:
+    """
+    12시간 예보 데이터를 HTML 테이블로 생성합니다.
+    
+    Args:
+        hourly_data (List[Dict[str, Any]]): 시간별 날씨 정보
+        
+    Returns:
+        str: HTML 형식의 시간별 예보 테이블
+    """
+    if not hourly_data:
+        return "<p>시간별 예보 정보를 불러올 수 없습니다.</p>"
+    
+    html = """
+    <table style="width:100%; border-collapse: collapse; text-align: center;">
+    <tr style="background-color: #f2f2f2;">
+        <th style="padding: 8px; border: 1px solid #ddd;">시간</th>
+        <th style="padding: 8px; border: 1px solid #ddd;">날씨</th>
+        <th style="padding: 8px; border: 1px solid #ddd;">온도</th>
+        <th style="padding: 8px; border: 1px solid #ddd;">습도</th>
+    </tr>
+    """
+    
+    for hour in hourly_data:
+        # 데이터 추출
+        dt = hour.get("dt", 0)
+        temp = hour.get("temp", 0)
+        humidity = hour.get("humidity", 0)
+        weather = hour.get("weather", [{}])[0]
+        weather_id = weather.get("id", 800)
+        
+        # 시간 변환 (Unix 시간을 시:분 형식으로)
+        from datetime import datetime
+        time_str = datetime.fromtimestamp(dt).strftime("%H:%M")
+        
+        # 날씨 상태 및 아이콘
+        condition, icon = get_weather_condition(weather_id)
+        
+        # 행 추가
+        html += f"""
+        <tr>
+            <td style="padding: 8px; border: 1px solid #ddd;">{time_str}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">{condition} {icon}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">{temp:.1f}°C</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">{humidity}%</td>
+        </tr>
+        """
+    
+    html += "</table>"
+    return html
 
 
 def check_precipitation_forecast(hourly_data: List[Dict[str, Any]]) -> Tuple[bool, bool]:
