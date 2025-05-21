@@ -3,10 +3,11 @@ import gc
 import os
 import logging
 import psutil
+import time
 from datetime import datetime
 import datetime as dt
 from enum import Enum
-from typing import Tuple
+from typing import Tuple, List, Dict, Any
 
 # 열거형 클래스 정의 - 날씨 상태 코드에 따른 설명
 class WeatherCondition(Enum):
@@ -18,6 +19,14 @@ class WeatherCondition(Enum):
     CLEAR = "맑음"
     CLOUDS = "구름"
 
+# 열거형 클래스 정의 - 습도 상태에 따른 설명
+class HumidityCondition(Enum):
+    VERY_DRY = "매우 건조"
+    DRY = "건조"
+    OPTIMAL = "적정"
+    HUMID = "습함"
+    VERY_HUMID = "매우 습함"
+
 # 날씨 아이콘 - 날씨 상태별로 사용할 이모지 아이콘 정의 
 WEATHER_ICONS = {
     "THUNDERSTORM": "⚡",
@@ -27,6 +36,15 @@ WEATHER_ICONS = {
     "ATMOSPHERE": "🌫️",
     "CLEAR": "☀️",
     "CLOUDS": "☁️"
+}
+
+# 습도 아이콘 - 습도 상태별로 사용할 이모지 아이콘 정의
+HUMIDITY_ICONS = {
+    "VERY_DRY": "🏜️",
+    "DRY": "📉",
+    "OPTIMAL": "👍",
+    "HUMID": "💧",
+    "VERY_HUMID": "💦"
 }
 
 # 열거형 클레스 정의 - 미세먼지 단계
@@ -160,6 +178,138 @@ def get_weather_message(condition: str) -> str:
     else:
         return "오늘도 좋은 하루 되세요!"
     
+
+# 온도와 계절에 따른 적정 습도 범위를 반환하는 함수
+def get_optimal_humidity_range(temp: float, month: int) -> Tuple[int, int]:
+    """
+    현재 온도와 계절(월)에 따른 적정 습도 범위를 반환합니다.
+    
+    Args:
+        temp: 현재 온도 (°C)
+        month: 현재 월 (1-12)
+    
+    Returns:
+        Tuple[int, int]: (최소 적정 습도, 최대 적정 습도)
+    """
+    # 온도에 따른 적정 습도 범위
+    if temp < 15:
+        min_optimal, max_optimal = 60, 70
+    elif 15 <= temp < 18:
+        min_optimal, max_optimal = 60, 70
+    elif 18 <= temp < 21:
+        min_optimal, max_optimal = 50, 60
+    elif 21 <= temp < 24:
+        min_optimal, max_optimal = 45, 55
+    else:  # 24도 이상
+        min_optimal, max_optimal = 40, 50
+    
+    # 계절에 따른 적정 습도 보정
+    # 봄/가을 (3-5월, 9-11월)
+    if 3 <= month <= 5 or 9 <= month <= 11:
+        season_min, season_max = 45, 55
+    # 여름 (6-8월)
+    elif 6 <= month <= 8:
+        season_min, season_max = 50, 60
+    # 겨울 (12, 1-2월)
+    else:
+        season_min, season_max = 35, 45
+    
+    # 온도와 계절 기준의 적정 습도 범위 중 넓은 범위 선택
+    min_humidity = min(min_optimal, season_min)
+    max_humidity = max(max_optimal, season_max)
+    
+    return min_humidity, max_humidity
+
+
+# 습도 상태와 메시지를 반환하는 함수
+def get_humidity_condition(current_humidity: float, min_optimal: int, max_optimal: int) -> Tuple[str, str, str]:
+    """
+    현재 습도와 적정 습도 범위를 비교하여 습도 상태와 메시지를 반환합니다.
+    
+    Args:
+        current_humidity: 현재 습도 (%)
+        min_optimal: 최소 적정 습도 (%)
+        max_optimal: 최대 적정 습도 (%)
+    
+    Returns:
+        Tuple[str, str, str]: (습도 상태, 아이콘, 메시지)
+    """
+    if current_humidity < min_optimal - 20:
+        condition = HumidityCondition.VERY_DRY.value
+        icon = HUMIDITY_ICONS["VERY_DRY"]
+        message = (
+            "습도가 매우 낮습니다. 기관지와 피부가 건조해질 수 있으니 가습기 사용을 권장하며, "
+            "충분한 수분 섭취와 보습에 신경 써주세요."
+        )
+    elif current_humidity < min_optimal:
+        condition = HumidityCondition.DRY.value
+        icon = HUMIDITY_ICONS["DRY"]
+        message = (
+            "습도가 다소 낮습니다. 기관지 건강을 위해 적절한 실내 습도 유지가 필요합니다. "
+            "가습기 사용이나 물을 자주 마시는 것이 도움이 됩니다."
+        )
+    elif min_optimal <= current_humidity <= max_optimal:
+        condition = HumidityCondition.OPTIMAL.value
+        icon = HUMIDITY_ICONS["OPTIMAL"]
+        message = "현재 습도는 적정 수준입니다. 쾌적한 환경이 유지되고 있어요."
+    elif current_humidity <= max_optimal + 20:
+        condition = HumidityCondition.HUMID.value
+        icon = HUMIDITY_ICONS["HUMID"]
+        message = (
+            "습도가 다소 높습니다. 실내 환기를 자주 하고, 제습기 사용을 고려해보세요. "
+            "곰팡이가 생기기 쉬운 환경이므로 주의가 필요합니다."
+        )
+    else:
+        condition = HumidityCondition.VERY_HUMID.value
+        icon = HUMIDITY_ICONS["VERY_HUMID"]
+        message = (
+            "습도가 매우 높습니다. 불쾌지수가 높을 수 있으니 제습기 사용과 충분한 환기가 필요합니다. "
+            "실내 곰팡이 번식에 주의하고, 음식물은 빨리 상할 수 있으니 관리에 신경 써주세요."
+        )
+    
+    return condition, icon, message
+
+
+# 시간대별 습도를 분석하여 오전/오후 평균 습도 계산
+def analyze_humidity(hourly_data: List[Dict[str, Any]]) -> Dict[str, float]:
+    """
+    시간대별 습도 데이터를 분석하여 오전과 오후의 평균 습도를 계산합니다.
+    
+    Args:
+        hourly_data (List[Dict[str, Any]]): 시간별 날씨 정보
+    
+    Returns:
+        Dict[str, float]: 오전/오후/전체 평균 습도 정보
+    """
+    if not hourly_data:
+        return {"morning_avg": 0, "afternoon_avg": 0, "overall_avg": 0}
+    
+    morning_humidity = []
+    afternoon_humidity = []
+    
+    for hour in hourly_data:
+        dt_value = hour.get("dt", 0)
+        humidity = hour.get("humidity", 0)
+        
+        # Unix 시간을 시간으로 변환
+        hour_of_day = datetime.fromtimestamp(dt_value).hour
+        
+        # 오전(0-11시)과 오후(12-23시)로 구분
+        if 0 <= hour_of_day < 12:
+            morning_humidity.append(humidity)
+        else:
+            afternoon_humidity.append(humidity)
+    
+    # 평균 계산 (데이터가 없는 경우 0으로 처리)
+    morning_avg = sum(morning_humidity) / len(morning_humidity) if morning_humidity else 0
+    afternoon_avg = sum(afternoon_humidity) / len(afternoon_humidity) if afternoon_humidity else 0
+    overall_avg = sum([h.get("humidity", 0) for h in hourly_data]) / len(hourly_data) if hourly_data else 0
+    
+    return {
+        "morning_avg": morning_avg,
+        "afternoon_avg": afternoon_avg,
+        "overall_avg": overall_avg
+    }
 
 # 메모리 정리 및 로그 기록 함수
 def memory_cleanup():

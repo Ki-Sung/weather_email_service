@@ -5,6 +5,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Dict, Any, Optional, List, Tuple, Counter as CounterType
 from collections import Counter
+from datetime import datetime
 
 from config.settings import (
     SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM, 
@@ -14,7 +15,10 @@ from utils.helpers import (
     get_weather_condition, 
     get_air_quality_level, 
     get_season_advice, 
-    get_weather_message
+    get_weather_message,
+    analyze_humidity,
+    get_optimal_humidity_range,
+    get_humidity_condition
 )
 
 # 이메일 내용 생성 
@@ -79,6 +83,35 @@ def create_email_content(
     # 15시간 예보 HTML 생성
     hourly_forecast_html = generate_hourly_forecast_html(hourly)
     
+    # 습도 분석
+    humidity_data = analyze_humidity(hourly)
+    morning_humidity = humidity_data["morning_avg"]
+    afternoon_humidity = humidity_data["afternoon_avg"]
+    overall_humidity = humidity_data["overall_avg"]
+    
+    # 현재 월 추출
+    current_month = datetime.now().month
+    
+    # 적정 습도 범위 계산 (아침/오후 각각)
+    morning_min_optimal, morning_max_optimal = get_optimal_humidity_range(temp_min, current_month)
+    afternoon_min_optimal, afternoon_max_optimal = get_optimal_humidity_range(temp_max, current_month)
+    
+    # 습도 상태 및 메시지 
+    morning_humidity_condition, morning_humidity_icon, morning_humidity_msg = get_humidity_condition(
+        morning_humidity, morning_min_optimal, morning_max_optimal
+    )
+    
+    afternoon_humidity_condition, afternoon_humidity_icon, afternoon_humidity_msg = get_humidity_condition(
+        afternoon_humidity, afternoon_min_optimal, afternoon_max_optimal
+    )
+    
+    # 습도 정보 HTML 생성
+    humidity_html = generate_humidity_html(
+        morning_humidity, afternoon_humidity, overall_humidity,
+        morning_humidity_condition, morning_humidity_icon, morning_humidity_msg,
+        afternoon_humidity_condition, afternoon_humidity_icon, afternoon_humidity_msg
+    )
+    
     # 이메일 본문 작성
     msg_text = f"""
     <html>
@@ -99,6 +132,14 @@ def create_email_content(
     <p>• 최고 온도: {temp_max:.1f}°C</p>
     
     <p>• 최저 온도: {temp_min:.1f}°C</p>
+    <hr>
+    
+    <h3>습도 정보 💧</h3>
+    {humidity_html}
+    <hr>
+    
+    <h3>15시간 예보</h3>
+    {hourly_forecast_html}
     <hr>
     
     <h3>대기질 정보: {air_quality_level}</h3>
@@ -142,6 +183,61 @@ def create_email_content(
         "subject": subject,
         "body": msg_text
     }
+
+
+def generate_humidity_html(
+    morning_humidity: float, 
+    afternoon_humidity: float, 
+    overall_humidity: float,
+    morning_condition: str, 
+    morning_icon: str, 
+    morning_msg: str,
+    afternoon_condition: str, 
+    afternoon_icon: str, 
+    afternoon_msg: str
+) -> str:
+    """
+    습도 정보를 HTML 형식으로 생성합니다.
+    
+    Args:
+        morning_humidity: 오전 평균 습도
+        afternoon_humidity: 오후 평균 습도
+        overall_humidity: 전체 평균 습도
+        morning_condition: 오전 습도 상태
+        morning_icon: 오전 습도 아이콘
+        morning_msg: 오전 습도 메시지
+        afternoon_condition: 오후 습도 상태
+        afternoon_icon: 오후 습도 아이콘
+        afternoon_msg: 오후 습도 메시지
+        
+    Returns:
+        str: HTML 형식의 습도 정보
+    """
+    html = f"""
+    <div style="margin-bottom: 15px;">
+        <table style="width:100%; border-collapse: collapse; margin-bottom: 15px;">
+            <tr style="background-color: #e6f7ff;">
+                <th style="padding: 8px; border: 1px solid #ddd; width: 33%;">오전 평균 습도</th>
+                <th style="padding: 8px; border: 1px solid #ddd; width: 33%;">오후 평균 습도</th>
+                <th style="padding: 8px; border: 1px solid #ddd; width: 33%;">전체 평균 습도</th>
+            </tr>
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{morning_humidity:.1f}% ({morning_condition} {morning_icon})</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{afternoon_humidity:.1f}% ({afternoon_condition} {afternoon_icon})</td>
+                <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{overall_humidity:.1f}%</td>
+            </tr>
+        </table>
+        
+        <div style="background-color: #f9f9f9; padding: 10px; border-left: 4px solid #4a90e2; margin-bottom: 10px;">
+            <p><strong>오전 습도 안내:</strong> {morning_msg}</p>
+        </div>
+        
+        <div style="background-color: #f9f9f9; padding: 10px; border-left: 4px solid #4a90e2;">
+            <p><strong>오후 습도 안내:</strong> {afternoon_msg}</p>
+        </div>
+    </div>
+    """
+    return html
 
 
 def get_overall_weather(hourly_data: List[Dict[str, Any]]) -> Tuple[str, str]:
