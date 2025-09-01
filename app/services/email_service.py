@@ -75,7 +75,7 @@ def create_email_content(
     weather_msg = get_weather_message(overall_weather_condition)                      # 날씨 메시지 추출 (종합 날씨 기준)
     
     # 비 또는 눈 예보 확인 - 분리하여 확인
-    will_rain, will_snow = check_precipitation_forecast(hourly)
+    will_rain, will_snow, will_shower, will_heavy_rain = check_precipitation_forecast(hourly)
     
     # 계절별 조언
     season_advice = get_season_advice(temp_max, temp_min)
@@ -152,13 +152,21 @@ def create_email_content(
     if season_advice:
         msg_text += f"<h3>특별 알림</h3>\n\n<p>{season_advice}</p>\n<hr>\n"
     
-    # 비 예보 확인
-    if will_rain:
-        msg_text += "<p><strong>오늘 비가 예상되니 외출 시 우산을 꼭 챙기세요!</strong></p>\n<hr>\n"
+    # 소나기 예보 확인
+    if will_shower:
+        msg_text += "<p><strong>🌦️ 오늘 소나기가 예상됩니다! 갑작스러운 날씨 변화에 대비하세요.</strong></p>\n<hr>\n"
+    
+    # 강한 비 예보 확인
+    elif will_heavy_rain:
+        msg_text += "<p><strong>🌧️ 오늘 강한 비가 예상됩니다! 외출을 자제하고 우산을 꼭 챙기세요.</strong></p>\n<hr>\n"
+    
+    # 일반 비 예보 확인
+    elif will_rain:
+        msg_text += "<p><strong>☔ 오늘 비가 예상되니 외출 시 우산을 꼭 챙기세요!</strong></p>\n<hr>\n"
     
     # 눈 예보 확인
     if will_snow:
-        msg_text += "<p><strong>오늘 눈이 예상되니 외출 시 따뜻하게 입고 미끄럼에 주의하세요!</strong></p>\n<hr>\n"
+        msg_text += "<p><strong>❄️ 오늘 눈이 예상되니 외출 시 따뜻하게 입고 미끄럼에 주의하세요!</strong></p>\n<hr>\n"
     
     # 이메일 본문 추가 
     msg_text += """
@@ -169,10 +177,18 @@ def create_email_content(
     </html>
     """
     
-    # 제목 설정 - 비와 눈 예보 분리
+    # 제목 설정 - 날씨 유형별 세분화
     subject = f"[날씨 알리미] 오늘의 날씨: {overall_weather_condition} {overall_weather_icon}"
     
-    if will_rain and will_snow:
+    if will_shower and will_snow:
+        subject = f"[날씨 알리미] 오늘 소나기와 눈 예보! 갑작스러운 날씨 변화에 대비하세요 {overall_weather_icon}"
+    elif will_shower:
+        subject = f"[날씨 알리미] 오늘 소나기 예보! 갑작스러운 날씨 변화에 대비하세요 {overall_weather_icon}"
+    elif will_heavy_rain and will_snow:
+        subject = f"[날씨 알리미] 오늘 강한 비와 눈 예보! 외출을 자제하세요 {overall_weather_icon}"
+    elif will_heavy_rain:
+        subject = f"[날씨 알리미] 오늘 강한 비 예보! 외출을 자제하고 우산을 챙기세요 {overall_weather_icon}"
+    elif will_rain and will_snow:
         subject = f"[날씨 알리미] 오늘 비와 눈 예보! 우산을 챙기세요 {overall_weather_icon}"
     elif will_rain:
         subject = f"[날씨 알리미] 오늘 비 예보! 우산을 챙기세요 {overall_weather_icon}"
@@ -342,7 +358,7 @@ def generate_hourly_forecast_html(hourly_data: List[Dict[str, Any]]) -> str:
     return html
 
 
-def check_precipitation_forecast(hourly_data: List[Dict[str, Any]]) -> Tuple[bool, bool]:
+def check_precipitation_forecast(hourly_data: List[Dict[str, Any]]) -> Tuple[bool, bool, bool, bool]:
     """
     시간별 날씨 데이터에서 비와 눈 예보를 확인합니다.
     
@@ -350,27 +366,39 @@ def check_precipitation_forecast(hourly_data: List[Dict[str, Any]]) -> Tuple[boo
         hourly_data (List[Dict[str, Any]]): 시간별 날씨 정보
         
     Returns:
-        Tuple[bool, bool]: (비 예보 여부, 눈 예보 여부)
+        Tuple[bool, bool, bool, bool]: (비 예보 여부, 눈 예보 여부, 소나기 여부, 강한 비 여부)
     """
     will_rain = False
     will_snow = False
+    will_shower = False
+    will_heavy_rain = False
     
     for hour in hourly_data:
         weather_id = hour.get("weather", [{}])[0].get("id", 800)
         
-        # 비 예보 확인 (500-531: 비)
-        if 500 <= weather_id <= 531:
+        # 소나기 확인 (500-504, 520-531)
+        if (500 <= weather_id <= 504) or (520 <= weather_id <= 531):
+            will_rain = True
+            will_shower = True
+            
+        # 일반 비 확인 (511: 보통의 비)
+        elif weather_id == 511:
             will_rain = True
             
+        # 강한 비 확인 (502-504, 522-531)
+        elif (502 <= weather_id <= 504) or (522 <= weather_id <= 531):
+            will_rain = True
+            will_heavy_rain = True
+            
         # 눈 예보 확인 (600-622: 눈)
-        if 600 <= weather_id <= 622:
+        elif 600 <= weather_id <= 622:
             will_snow = True
             
-        # 양쪽 다 확인되면 루프 종료
-        if will_rain and will_snow:
+        # 모든 상태가 확인되면 루프 종료
+        if will_rain and will_snow and will_shower and will_heavy_rain:
             break
             
-    return will_rain, will_snow
+    return will_rain, will_snow, will_shower, will_heavy_rain
 
 
 # 이메일 전송 
