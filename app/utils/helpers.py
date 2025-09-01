@@ -13,11 +13,15 @@ from typing import Tuple, List, Dict, Any
 class WeatherCondition(Enum):
     THUNDERSTORM = "천둥번개"
     DRIZZLE = "이슬비"
-    RAIN = "비"
+    LIGHT_RAIN = "가벼운 비"
+    MODERATE_RAIN = "비"
+    HEAVY_RAIN = "강한 비"
+    SHOWER_RAIN = "소나기"
     SNOW = "눈"
     ATMOSPHERE = "안개"
     CLEAR = "맑음"
-    CLOUDS = "구름"
+    PARTLY_CLOUDY = "구름 조금"
+    CLOUDS = "구름 많음"
 
 # 열거형 클래스 정의 - 습도 상태에 따른 설명
 class HumidityCondition(Enum):
@@ -31,10 +35,14 @@ class HumidityCondition(Enum):
 WEATHER_ICONS = {
     "THUNDERSTORM": "⚡",
     "DRIZZLE": "🌦️",
-    "RAIN": "☔",
+    "LIGHT_RAIN": "🌦️",
+    "MODERATE_RAIN": "☔",
+    "HEAVY_RAIN": "🌧️",
+    "SHOWER_RAIN": "🌦️",
     "SNOW": "❄️",
     "ATMOSPHERE": "🌫️",
     "CLEAR": "☀️",
+    "PARTLY_CLOUDY": "⛅",
     "CLOUDS": "☁️"
 }
 
@@ -64,30 +72,39 @@ def get_weather_condition(code: int) -> Tuple[str, str]:
     
     Args:
         code: 날씨 코드
-            300 미만: 천동번개 
-            300이상 400미만: 이슬비
-            400이상 600미만: 비
-            600이상 700미만: 눈
-            700이상 800미만: 안개
+            200-299: 천둥번개
+            300-399: 이슬비
+            500-504: 가벼운 소나기
+            511: 보통의 비
+            520-531: 소나기
+            600-699: 눈
+            700-799: 안개
             800: 맑음
-            800 초과: 구름
+            801: 구름 조금
+            802-899: 구름 많음
         
     Returns:
         Tuple[str, str]: 날씨 상태와 아이콘
     """
-    if code < 300:
+    if 200 <= code < 300:
         return WeatherCondition.THUNDERSTORM.value, WEATHER_ICONS["THUNDERSTORM"]
-    elif code < 400:
+    elif 300 <= code < 400:
         return WeatherCondition.DRIZZLE.value, WEATHER_ICONS["DRIZZLE"]
-    elif code < 600:
-        return WeatherCondition.RAIN.value, WEATHER_ICONS["RAIN"]
-    elif code < 700:
+    elif 500 <= code <= 504:  # 가벼운 소나기
+        return WeatherCondition.SHOWER_RAIN.value, WEATHER_ICONS["SHOWER_RAIN"]
+    elif code == 511:  # 보통의 비
+        return WeatherCondition.MODERATE_RAIN.value, WEATHER_ICONS["MODERATE_RAIN"]
+    elif 520 <= code <= 531:  # 소나기
+        return WeatherCondition.SHOWER_RAIN.value, WEATHER_ICONS["SHOWER_RAIN"]
+    elif 600 <= code < 700:
         return WeatherCondition.SNOW.value, WEATHER_ICONS["SNOW"]
-    elif code < 800:
+    elif 700 <= code < 800:
         return WeatherCondition.ATMOSPHERE.value, WEATHER_ICONS["ATMOSPHERE"]
     elif code == 800:
         return WeatherCondition.CLEAR.value, WEATHER_ICONS["CLEAR"]
-    else:
+    elif code == 801:
+        return WeatherCondition.PARTLY_CLOUDY.value, WEATHER_ICONS["PARTLY_CLOUDY"]
+    else:  # 802-899
         return WeatherCondition.CLOUDS.value, WEATHER_ICONS["CLOUDS"]
 
 
@@ -160,19 +177,27 @@ def get_weather_message(condition: str) -> str:
     Returns:
         str: 날씨 상태에 따른 메시지
     """
-    # 날씨 상테에 따른 메시지 설정
+    # 날씨 상태에 따른 메시지 설정
     if condition == WeatherCondition.CLEAR.value:
         return "오늘은 맑은 날씨입니다. 야외 활동하기 좋은 날이에요! 🌞"
-    elif condition == WeatherCondition.RAIN.value:
+    elif condition == WeatherCondition.PARTLY_CLOUDY.value:
+        return "구름이 조금 있지만 대체로 맑은 날씨입니다. 🌤️"
+    elif condition == WeatherCondition.CLOUDS.value:
+        return "오늘은 구름이 많아요. 햇빛이 약할 수 있어요. ☁️"
+    elif condition == WeatherCondition.LIGHT_RAIN.value:
+        return "가벼운 비가 내릴 수 있어요. 우산을 챙기세요. 🌦️"
+    elif condition == WeatherCondition.MODERATE_RAIN.value:
         return "오늘은 비가 예상되니 우산을 꼭 챙기세요! ☔"
+    elif condition == WeatherCondition.HEAVY_RAIN.value:
+        return "강한 비가 예상됩니다. 외출을 자제하고 우산을 꼭 챙기세요! 🌧️"
+    elif condition == WeatherCondition.SHOWER_RAIN.value:
+        return "소나기가 내릴 수 있어요. 갑작스러운 날씨 변화에 대비하세요! 🌦️"
     elif condition == WeatherCondition.SNOW.value:
         return "눈이 내릴 예정이에요. 미끄러지지 않게 조심하세요! ❄️"
     elif condition == WeatherCondition.THUNDERSTORM.value:
         return "천둥번개가 칠 수 있으니 야외 활동을 자제하세요. ⚡"
     elif condition == WeatherCondition.DRIZZLE.value:
         return "이슬비가 내릴 수 있어요. 우산을 챙기세요. 🌦️"
-    elif condition == WeatherCondition.CLOUDS.value:
-        return "오늘은 구름이 많아요. 햇빛이 약할 수 있어요. ☁️"
     elif condition == WeatherCondition.ATMOSPHERE.value:
         return "안개가 끼었습니다. 운전 시 주의하세요. 🌫️"
     else:
