@@ -12,22 +12,22 @@
 
 ## 프로젝트 구조
 ```
+.github/
+└── workflows/
+    └── weather-email.yml # 매일 아침 7시(KST) GitHub Actions 배치
+
 app/
-│
 ├── config/
 │   └── settings.py       # 설정 및 환경 변수
-│
 ├── services/
 │   ├── weather_service.py     # 날씨 데이터 관련 함수
 │   └── email_service.py       # 이메일 전송 관련 함수
-│
 ├── utils/
 │   └── helpers.py        # 유틸리티 함수 및 헬퍼 클래스
-│
-├── .env                  # 환경 변수 파일 (비공개)
-├── main.py               # 애플리케이션 진입점
-├── requirements.txt      # 필요한 패키지 목록
-└── README.md             # 프로젝트 설명
+└── main.py               # 애플리케이션 진입점
+
+requirements.txt          # 필요한 패키지 목록
+README.md                 # 프로젝트 설명
 ```
 
 ## 설치 방법
@@ -63,15 +63,15 @@ pip install -r requirements.txt
 OWM_API_KEY=your_openweathermap_api_key
 
 # 이메일 서버 설정
-SMTP_HOST="smtp.your-email-provider.com"
-SMTP_PORT=25
-SMTP_USER="your_email@example.com"
-SMTP_PASSWORD="your_email_password"
-SMTP_FROM="your_email@example.com"
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@example.com
+SMTP_PASSWORD=your_email_password
+SMTP_FROM=your_email@example.com
 
 # 수신자 설정
-RECIPIENT="main_recipient@example.com"
-BCC_RECIPIENTS=["hidden_recipient1@example.com", "hidden_recipient2@example.com"]
+RECIPIENT=main_recipient@example.com
+BCC_RECIPIENTS=hidden_recipient1@example.com,hidden_recipient2@example.com
 ```
 
 ### OpenWeatherMap API 키 얻기
@@ -79,12 +79,46 @@ BCC_RECIPIENTS=["hidden_recipient1@example.com", "hidden_recipient2@example.com"
 2. 로그인 후 My API Keys 섹션에서 새 API 키를 생성하세요.
 3. 생성한 API 키를 `.env` 파일의 `OWM_API_KEY` 변수에 입력하세요.
 
-## 실행 방법
+### Gmail SMTP 사용 시
+1. Google 계정에서 2단계 인증을 활성화하세요.
+2. [앱 비밀번호](https://myaccount.google.com/apppasswords)를 생성하세요.
+3. `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_PASSWORD`에 앱 비밀번호를 넣으세요.
+4. 포트 `465`는 SSL, `587`은 STARTTLS로 자동 연결됩니다.
+
+## GitHub Actions로 매일 아침 7시 발송 (권장)
+
+서버를 켜 두지 않아도, GitHub Actions가 매일 **한국시간 오전 7시**(UTC 22:00)에 메일을 보냅니다.
+
+### 1. Repository Secrets 등록
+저장소 → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**에 아래 값을 추가하세요.
+
+| Secret 이름 | 설명 |
+|---|---|
+| `OWM_API_KEY` | OpenWeatherMap API 키 |
+| `SMTP_HOST` | 예: `smtp.gmail.com` |
+| `SMTP_PORT` | 예: `587` |
+| `SMTP_USER` | SMTP 로그인 이메일 |
+| `SMTP_PASSWORD` | SMTP 비밀번호 (Gmail이면 앱 비밀번호) |
+| `SMTP_FROM` | 보내는 사람 주소 |
+| `RECIPIENT` | 메인 수신자 이메일 |
+| `BCC_RECIPIENTS` | 숨은 참조 (쉼표 구분, 선택) |
+
+### 2. 워크플로 확인
+- 파일: [`.github/workflows/weather-email.yml`](.github/workflows/weather-email.yml)
+- 스케줄: `0 22 * * *` (UTC) = KST 07:00
+- 수동 실행: Actions 탭 → **Weather Email Daily** → **Run workflow**
+
+### 3. 참고
+- 무료 플랜 cron은 수 분~수십 분 지연될 수 있습니다.
+- 장기간 비활성 저장소는 스케줄이 멈출 수 있습니다. 그때는 Actions에서 수동 실행으로 확인하세요.
+
+## 실행 방법 (로컬)
 
 ### 일반 실행 (스케줄러 모드)
 이 모드는 매일 아침 7시에 날씨 이메일을 자동으로 전송합니다.
 
 ```bash
+cd app
 python main.py
 ```
 
@@ -93,6 +127,7 @@ python main.py
 환경 설정을 테스트하기 위해 즉시 날씨 이메일을 전송합니다.
 
 ```bash
+cd app
 python main.py --now
 ```
 

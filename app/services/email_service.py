@@ -442,39 +442,38 @@ def send_email(subject: str, body: str) -> bool:
     msgAlternative.attach(msgText)
     
     try:
-        # 로그 기록
-        logging.info(f"일반 SMTP로 이메일 전송 시도 ({SMTP_HOST}:{SMTP_PORT})...")
-        
-        # 일반 SMTP 연결
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
-            # 로그인
+        smtp_port = int(SMTP_PORT) if SMTP_PORT else 587
+        logging.info(f"SMTP로 이메일 전송 시도 ({SMTP_HOST}:{smtp_port})...")
+
+        if smtp_port == 465:
+            server = smtplib.SMTP_SSL(SMTP_HOST, smtp_port, timeout=30)
+        else:
+            server = smtplib.SMTP(SMTP_HOST, smtp_port, timeout=30)
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+
+        try:
             server.login(SMTP_USER, SMTP_PASSWORD)
-            
-            # 이메일 전송 - 모든 수신자에게 전송하지만 BCC는 숨김처리
-            server.sendmail(
-                SMTP_FROM,          # 보내는 사람 
-                all_recipients,     # 모든 수신자 (TO + BCC)
-                msg.as_string()     # 이메일 내용 
-            )
-            
-            # 로그 기록
-            to_log = ", ".join(to_recipients) if to_recipients else "없음"       # 수신자 로그 
-            bcc_log = ", ".join(bcc_recipients) if bcc_recipients else "없음"    # BCC 로그 
-            
-            logging.info(f"이메일 전송 완료: {subject}")                            # 로그 기록 
-            logging.info(f"수신자(TO): {to_log}")                                 # 수신자 로그 
-            logging.info(f"수신자(BCC): {bcc_log}")                               # BCC 로그 
-            
-            return True
-            
+            server.sendmail(SMTP_FROM, all_recipients, msg.as_string())
+        finally:
+            server.quit()
+
+        to_log = ", ".join(to_recipients) if to_recipients else "없음"
+        bcc_log = ", ".join(bcc_recipients) if bcc_recipients else "없음"
+
+        logging.info(f"이메일 전송 완료: {subject}")
+        logging.info(f"수신자(TO): {to_log}")
+        logging.info(f"수신자(BCC): {bcc_log}")
+
+        return True
+
     except Exception as e:
-        # 이메일 전송 중 오류 발생 시 경고 메시지 출력
         logging.error(f"이메일 전송 중 오류 발생: {e}")
-        
-        # 오류 세부 정보 기록
-        if hasattr(e, 'smtp_code'):
-            logging.error(f"SMTP 코드: {e.smtp_code}")                              # SMTP 코드 
-        if hasattr(e, 'smtp_error'):
-            logging.error(f"SMTP 오류: {e.smtp_error}")                             # SMTP 오류 
-        
+
+        if hasattr(e, "smtp_code"):
+            logging.error(f"SMTP 코드: {e.smtp_code}")
+        if hasattr(e, "smtp_error"):
+            logging.error(f"SMTP 오류: {e.smtp_error}")
+
         return False

@@ -1,0 +1,38 @@
+name: Weather Email Daily
+
+on:
+  schedule:
+    # UTC 22:00 = KST 07:00
+    - cron: "0 22 * * *"
+  workflow_dispatch:
+
+jobs:
+  send-weather-email:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Send weather email
+        working-directory: app
+        env:
+          OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          RECIPIENT: ${{ secrets.RECIPIENT }}
+          BCC_RECIPIENTS: ${{ secrets.BCC_RECIPIENTS }}
+        run: python main.py --now
