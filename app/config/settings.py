@@ -1,9 +1,12 @@
 ## 애플리케이션 설정 및 환경 변수
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
-# 환경 변수 로드 
-load_dotenv(verbose=True)
+# 프로젝트 루트의 .env 로드 (app/에서 실행해도 동작)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+load_dotenv(PROJECT_ROOT / ".env", verbose=True)
 
 # 이메일 설정 
 SMTP_HOST = os.getenv("SMTP_HOST")                   # SMTP 서버 주소
