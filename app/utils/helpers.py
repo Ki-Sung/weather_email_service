@@ -6,6 +6,11 @@ import psutil
 import time
 from datetime import datetime
 import datetime as dt
+from zoneinfo import ZoneInfo
+
+from config.settings import TIMEZONE, FORECAST_START_HOUR, FORECAST_HOURS
+
+KST = ZoneInfo(TIMEZONE)
 from enum import Enum
 from typing import Tuple, List, Dict, Any
 
@@ -295,6 +300,29 @@ def get_humidity_condition(current_humidity: float, min_optimal: int, max_optima
     return condition, icon, message
 
 
+def to_kst(unix_ts: int) -> datetime:
+    """Unix 타임스탬프를 KST datetime으로 변환합니다."""
+    return datetime.fromtimestamp(unix_ts, tz=KST)
+
+
+def get_hourly_forecast_from_kst(
+    hourly_data: List[Dict[str, Any]],
+    start_hour: int = FORECAST_START_HOUR,
+    count: int = FORECAST_HOURS,
+) -> List[Dict[str, Any]]:
+    """오늘 KST start_hour부터 count개의 시간별 예보를 반환합니다."""
+    if not hourly_data:
+        return []
+
+    today = datetime.now(KST).date()
+    start_ts = datetime(
+        today.year, today.month, today.day, start_hour, 0, 0, tzinfo=KST
+    ).timestamp()
+
+    filtered = [hour for hour in hourly_data if hour.get("dt", 0) >= start_ts]
+    return filtered[:count] if filtered else hourly_data[:count]
+
+
 # 시간대별 습도를 분석하여 오전/오후 평균 습도 계산
 def analyze_humidity(hourly_data: List[Dict[str, Any]]) -> Dict[str, float]:
     """
@@ -316,8 +344,8 @@ def analyze_humidity(hourly_data: List[Dict[str, Any]]) -> Dict[str, float]:
         dt_value = hour.get("dt", 0)
         humidity = hour.get("humidity", 0)
         
-        # Unix 시간을 시간으로 변환
-        hour_of_day = datetime.fromtimestamp(dt_value).hour
+        # Unix 시간을 KST 기준 시간으로 변환
+        hour_of_day = to_kst(dt_value).hour
         
         # 오전(0-11시)과 오후(12-23시)로 구분
         if 0 <= hour_of_day < 12:

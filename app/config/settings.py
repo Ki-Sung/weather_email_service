@@ -31,3 +31,6 @@ SEOUL_LON = 126.986
 
 # 스케줄 설정
 SCHEDULE_TIME = "07:00"  # 매일 아침 7시
+TIMEZONE = "Asia/Seoul"  # 한국 표준시
+FORECAST_START_HOUR = 7  # 시간별 예보 시작 시각 (KST)
+FORECAST_HOURS = 15      # 시간별 예보 개수

@@ -11,6 +11,7 @@ from config.settings import (
     SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM, 
     RECIPIENT, BCC_RECIPIENTS
 )
+from config.settings import FORECAST_START_HOUR, FORECAST_HOURS
 from utils.helpers import (
     get_weather_condition, 
     get_air_quality_level, 
@@ -18,7 +19,10 @@ from utils.helpers import (
     get_weather_message,
     analyze_humidity,
     get_optimal_humidity_range,
-    get_humidity_condition
+    get_humidity_condition,
+    get_hourly_forecast_from_kst,
+    to_kst,
+    KST,
 )
 
 # 이메일 내용 생성 
@@ -45,7 +49,11 @@ def create_email_content(
     
     # 현재 날씨 정보 추출
     current = weather_data.get("current", {})       # 현재 날씨 정보 
-    hourly = weather_data.get("hourly", [])[:15]    # 15시간 데이터로 변경
+    hourly = get_hourly_forecast_from_kst(
+        weather_data.get("hourly", []),
+        start_hour=FORECAST_START_HOUR,
+        count=FORECAST_HOURS,
+    )
     daily = weather_data.get("daily", [])[0] if weather_data.get("daily") else {}    # 일일 데이터 
     
     # 필요한 데이터 추출
@@ -90,7 +98,7 @@ def create_email_content(
     overall_humidity = humidity_data["overall_avg"]
     
     # 현재 월 추출
-    current_month = datetime.now().month
+    current_month = datetime.now(KST).month
     
     # 적정 습도 범위 계산 (아침/오후 각각)
     morning_min_optimal, morning_max_optimal = get_optimal_humidity_range(temp_min, current_month)
@@ -337,9 +345,8 @@ def generate_hourly_forecast_html(hourly_data: List[Dict[str, Any]]) -> str:
         weather = hour.get("weather", [{}])[0]
         weather_id = weather.get("id", 800)
         
-        # 시간 변환 (Unix 시간을 시:분 형식으로)
-        from datetime import datetime
-        time_str = datetime.fromtimestamp(dt).strftime("%H:%M")
+        # Unix 시간을 KST 시:분 형식으로 변환
+        time_str = to_kst(dt).strftime("%H:%M")
         
         # 날씨 상태 및 아이콘
         condition, icon = get_weather_condition(weather_id)
