@@ -35,7 +35,7 @@ gc.set_threshold(700, 10, 5)        # GC 임계값 조정 (기본값보다 약�
 
 
 # 날씨 이메일 전송 함수 
-async def send_weather_email():
+async def send_weather_email() -> bool:
     """
     날씨 정보를 이메일로 전송합니다.
     """
@@ -44,6 +44,7 @@ async def send_weather_email():
     
     # 로그 기록 
     logger.info(f"날씨 이메일 전송 시작: {datetime.now()}")
+    sent = False
     
     try:
         # 로그 파일 확인 및 로테이션
@@ -57,10 +58,10 @@ async def send_weather_email():
         email_content = create_email_content(weather_data, air_quality_data)
         
         # 이메일 전송
-        result = send_email(email_content["subject"], email_content["body"])
+        sent = send_email(email_content["subject"], email_content["body"])
         
         # 이메일 전송 결과 로그 기록 
-        if result:
+        if sent:
             logger.info("날씨 이메일 전송 성공")
         else:
             logger.error("날씨 이메일 전송 실패")
@@ -79,6 +80,8 @@ async def send_weather_email():
             memory_cleanup()
             MEMORY_LAST_CLEANUP = now
 
+    return sent
+
 
 # 스케줄러에서 실행할 작업 
 def job():
@@ -90,11 +93,14 @@ def job():
     asyncio.set_event_loop(loop)                        # 생성된 루프 설정 
     
     try:
-        loop.run_until_complete(send_weather_email())    # 이메일 전송 작업 실행 
+        sent = loop.run_until_complete(send_weather_email())
     finally:
         # 작업 완료 후 메모리 정리
         loop.close()                                    # 루프 닫기 
-        gc.collect()                                    # 명시적 가비지 컬렉션 
+        gc.collect()                                    # 명시적 가비지 컬렉션
+
+    if not sent:
+        raise SystemExit(1) 
 
 
 # 스캐줄러 실행 함수 

@@ -2,9 +2,16 @@ name: Weather Email Daily
 
 on:
   schedule:
-    # UTC 22:00 = KST 07:00
-    - cron: "0 22 * * *"
+    # 정각(:00)은 GitHub 대기열이 밀리고, 하루 1회 cron은 skip될 수 있음.
+    # 같은 날 한 번만 보내도록 cache로 막고, 백업 슬롯으로 누락을 보완한다.
+    - cron: "7 22 * * *"    # KST 07:07
+    - cron: "27 22 * * *"   # KST 07:27
+    - cron: "0 23 * * *"    # KST 08:00
   workflow_dispatch:
+
+concurrency:
+  group: weather-email-daily
+  cancel-in-progress: false
 
 jobs:
   send-weather-email:
@@ -15,16 +22,30 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: KST date
+        id: kst
+        run: echo "date=$(TZ=Asia/Seoul date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Already sent today
+        id: sent
+        uses: actions/cache@v4
+        with:
+          path: .weather-email-sent
+          key: weather-email-sent-${{ steps.kst.outputs.date }}
+
       - name: Set up Python
+        if: github.event_name == 'workflow_dispatch' || steps.sent.outputs.cache-hit != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
 
       - name: Install dependencies
+        if: github.event_name == 'workflow_dispatch' || steps.sent.outputs.cache-hit != 'true'
         run: pip install -r requirements.txt
 
       - name: Send weather email
+        if: github.event_name == 'workflow_dispatch' || steps.sent.outputs.cache-hit != 'true'
         working-directory: app
         env:
           OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
@@ -36,3 +57,7 @@ jobs:
           RECIPIENT: ${{ secrets.RECIPIENT }}
           BCC_RECIPIENTS: ${{ secrets.BCC_RECIPIENTS }}
         run: python main.py --now
+
+      - name: Mark sent
+        if: success() && (github.event_name == 'workflow_dispatch' || steps.sent.outputs.cache-hit != 'true')
+        run: echo sent > .weather-email-sent
