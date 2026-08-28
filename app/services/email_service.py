@@ -1,6 +1,7 @@
 ## 이메일 전송 관련 서비스
 import logging
 import smtplib
+import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Dict, Any, Optional, List, Tuple, Counter as CounterType
@@ -448,39 +449,41 @@ def send_email(subject: str, body: str) -> bool:
     msgText = MIMEText(body, 'html', _charset="utf8")
     msgAlternative.attach(msgText)
     
-    try:
-        smtp_port = int(SMTP_PORT) if SMTP_PORT else 587
-        logging.info(f"SMTP로 이메일 전송 시도 ({SMTP_HOST}:{smtp_port})...")
+    smtp_port = int(SMTP_PORT) if SMTP_PORT else 587
 
-        if smtp_port == 465:
-            server = smtplib.SMTP_SSL(SMTP_HOST, smtp_port, timeout=30)
-        else:
-            server = smtplib.SMTP(SMTP_HOST, smtp_port, timeout=30)
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-
+    for attempt in range(1, 4):
         try:
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_FROM, all_recipients, msg.as_string())
-        finally:
-            server.quit()
+            logging.info(f"SMTP로 이메일 전송 시도 ({SMTP_HOST}:{smtp_port})... [{attempt}/3]")
 
-        to_log = ", ".join(to_recipients) if to_recipients else "없음"
-        bcc_log = ", ".join(bcc_recipients) if bcc_recipients else "없음"
+            if smtp_port == 465:
+                server = smtplib.SMTP_SSL(SMTP_HOST, smtp_port, timeout=30)
+            else:
+                server = smtplib.SMTP(SMTP_HOST, smtp_port, timeout=30)
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
 
-        logging.info(f"이메일 전송 완료: {subject}")
-        logging.info(f"수신자(TO): {to_log}")
-        logging.info(f"수신자(BCC): {bcc_log}")
+            try:
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(SMTP_FROM, all_recipients, msg.as_string())
+            finally:
+                server.quit()
 
-        return True
+            to_log = ", ".join(to_recipients) if to_recipients else "없음"
+            bcc_log = ", ".join(bcc_recipients) if bcc_recipients else "없음"
 
-    except Exception as e:
-        logging.error(f"이메일 전송 중 오류 발생: {e}")
+            logging.info(f"이메일 전송 완료: {subject}")
+            logging.info(f"수신자(TO): {to_log}")
+            logging.info(f"수신자(BCC): {bcc_log}")
+            return True
 
-        if hasattr(e, "smtp_code"):
-            logging.error(f"SMTP 코드: {e.smtp_code}")
-        if hasattr(e, "smtp_error"):
-            logging.error(f"SMTP 오류: {e.smtp_error}")
+        except Exception as e:
+            logging.error(f"이메일 전송 중 오류 발생: {e}")
+            if hasattr(e, "smtp_code"):
+                logging.error(f"SMTP 코드: {e.smtp_code}")
+            if hasattr(e, "smtp_error"):
+                logging.error(f"SMTP 오류: {e.smtp_error}")
+            if attempt < 3:
+                time.sleep(5)
 
-        return False
+    return False
