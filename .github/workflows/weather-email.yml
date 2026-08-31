@@ -2,11 +2,11 @@ name: Weather Email Daily
 
 on:
   schedule:
-    # 정각(:00)은 GitHub 대기열이 밀리고, 하루 1회 cron은 skip될 수 있음.
+    # GitHub cron은 수 시간 밀릴 수 있어, 늦게 걸려도 아침에 오게 앞당긴다.
     # 같은 날 한 번만 보내도록 cache로 막고, 백업 슬롯으로 누락을 보완한다.
+    - cron: "7 20 * * *"    # KST 05:07
+    - cron: "7 21 * * *"    # KST 06:07
     - cron: "7 22 * * *"    # KST 07:07
-    - cron: "27 22 * * *"   # KST 07:27
-    - cron: "0 23 * * *"    # KST 08:00
   workflow_dispatch:
 
 concurrency:
